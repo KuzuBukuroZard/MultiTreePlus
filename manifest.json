@@ -1,0 +1,4 @@
+{
+  "namespace": "kuzubukuro_multitree_plus",
+  "setup": "setup.mjs"
+}
