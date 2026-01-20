@@ -1,5 +1,4 @@
 const NS = "kuzubukuro_multitree_plus";
-const STORE_KEY = `${NS}:activeTreeIDs`;
 
 function clampInt(v, min, max) {
   const n = Number(v);
@@ -16,6 +15,14 @@ function parseIDs(raw) {
     .filter(Boolean);
 }
 
+// Generate an isolation key for the current save file (by character name)
+function getScopedStoreKey() {
+  const name = String(game?.characterName ?? "default").trim() || "default";
+  // Use encodeURIComponent to safely encode all characters (supports Chinese/Japanese, etc.)
+  const safe = encodeURIComponent(name).slice(0, 120);
+  return `${NS}:activeTreeIDs:${safe}`;
+}
+
 // ---------- Silent storage adapter (characterData preferred, localStorage fallback) ----------
 function makeSilentStore(ctx) {
   const cd = ctx?.characterData;
@@ -30,16 +37,27 @@ function makeSilentStore(ctx) {
            typeof cd.set === "function" ? cd.set.bind(cd) : null);
 
   function get() {
+    const key = getScopedStoreKey();
+
+    // Optional migration: if old global key exists, move it into scoped key once
+    try {
+      const old = `${NS}:activeTreeIDs`;
+      if (!localStorage.getItem(key) && localStorage.getItem(old)) {
+        localStorage.setItem(key, localStorage.getItem(old));
+        localStorage.removeItem(old);
+      }
+    } catch {}
+
     // 1) characterData
     if (cdGet) {
       try {
-        const v = cdGet(STORE_KEY);
+        const v = cdGet(key);
         if (Array.isArray(v)) return v;
       } catch {}
     }
     // 2) localStorage fallback
     try {
-      const raw = localStorage.getItem(STORE_KEY);
+      const raw = localStorage.getItem(key);
       const v = raw ? JSON.parse(raw) : null;
       return Array.isArray(v) ? v : [];
     } catch {
@@ -48,13 +66,14 @@ function makeSilentStore(ctx) {
   }
 
   function set(ids) {
+    const key = getScopedStoreKey();
     const arr = Array.isArray(ids) ? ids : [];
     // 1) characterData
     if (cdSet) {
-      try { cdSet(STORE_KEY, arr); } catch {}
+      try { cdSet(key, arr); } catch {}
     }
     // 2) localStorage fallback (always write; helps local mods / dev)
-    try { localStorage.setItem(STORE_KEY, JSON.stringify(arr)); } catch {}
+    try { localStorage.setItem(key, JSON.stringify(arr)); } catch {}
   }
 
   return { get, set };
